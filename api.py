@@ -2,9 +2,11 @@
 from flask import Flask
 from flask_restful import Api, Resource, reqparse
 from MongoCon import MongoCon
+from flask_cors import CORS
 
 
 app = Flask(__name__)
+cors = CORS(app, resources={r"/api/*": {"origins": "*"}})
 api = Api(app)
 db = MongoCon()
 
