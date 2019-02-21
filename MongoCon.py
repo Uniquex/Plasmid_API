@@ -9,7 +9,8 @@ class MongoCon:
 
 
     def getServers(self):
-        print(self.client.list_database_names())
+
+        return dumps(self.colServ.find())
 
     def getServer(self, name):
         client = MongoClient('0.0.0.0', 27017)
