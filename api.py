@@ -8,7 +8,7 @@ from flask_jwt_extended import (
     JWTManager, jwt_required, create_access_token,
     get_jwt_identity
 )
-
+import datetime
 
 
 class User(object):
@@ -22,17 +22,16 @@ class User(object):
 
 
 users = [
-    User(1, 'admin', '123'),
+    User(1, 'admin', '123456'),
     User(2, 'user2', 'abcxyz'),
 ]
 
 username_table = {u.username: u for u in users}
 userid_table = {u.id: u for u in users}
 
-
 app = Flask(__name__)
 cors = CORS(app, resources={r"/*": {"origins": "*"}})
-app.config['SECRET_KEY'] = 'super-secret'
+app.config['SECRET_KEY'] = 'test-key'
 db = MongoCon()
 idb = InfluxDBClient('localhost', 8086, 'root', 'root', 'RPI')
 jwt = JWTManager(app)
@@ -55,7 +54,8 @@ def auth():
         return jsonify({"msg": "Bad username or password"}), 401
 
     # Identity can be any data that is json serializable
-    access_token = create_access_token(identity=username)
+    expires = datetime.timedelta(days=14)
+    access_token = create_access_token(identity=username, expires_delta=expires)
     return jsonify(access_token=access_token), 200
 
 
@@ -70,11 +70,29 @@ def identity(payload):
     return userid_table.get(user_id, None)
 
 
-
 @app.route('/server/<servername>', methods=['GET'])
 @jwt_required
 def server(servername):
-        return db.getServer(servername)
+    return db.getServer(servername)
+
+
+@app.route('/server/<servername>/cpuLoad/<time>', methods=['GET'])
+@jwt_required
+def serverLoadTime(servername, time):
+    if time == -1:
+        query = 'SELECT CPU_Usage AS "CPU", RAM_Usage AS "RAM"  FROM "RPI"."autogen"."server_load_short" WHERE "host"= \'' + servername + '\' FILL(previous)'
+    else:
+        query = 'SELECT mean("CPU_Usage") AS "CPU", mean("RAM_Usage") AS "RAM"  FROM "RPI"."autogen"."server_load_short" WHERE "host"= \'' + servername + '\' AND time > now()-' + time + 'h GROUP BY time(5m) FILL(previous)'
+    result = idb.query(query)
+    return jsonify(result.raw)
+
+@app.route('/server/<servername>/cpuLoad', methods=['GET'])
+@jwt_required
+def serverLoad(servername):
+    query = 'SELECT CPU_Usage AS "CPU", RAM_Usage AS "RAM"  FROM "RPI"."autogen"."server_load_short" WHERE "host"= \'' + servername + '\' FILL(previous)'
+    result = idb.query(query)
+    return jsonify(result.raw)
+
 
 
 @app.route('/servers', methods=['GET'])
@@ -83,11 +101,12 @@ def servers():
     return db.getServers()
 
 
-@app.route('/cpuLoad/<hours>', methods=['GET'])
+@app.route('/cpuLoad', methods=['GET'])
 @jwt_required
-def cpuLoad(hours):
-        result = idb.query('SELECT mean("CPU_Usage") AS "mean_CPU_Usage" FROM "RPI"."autogen"."server_load_short" WHERE time > now()-'+hours+'h GROUP BY time(5m) FILL(previous)')
-        return result.raw
+def cpuLoad():
+    result = idb.query('SELECT mean("CPU_Usage") AS "mean_CPU_Usage" FROM "RPI"."autogen"."server_load_short" WHERE "host"=raspberrypi_2 AND time > now()-2h GROUP BY time(5m) FILL(previous)')
+    return result.raw
+
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0',debug=True)
+    app.run(host='0.0.0.0', debug=True)
