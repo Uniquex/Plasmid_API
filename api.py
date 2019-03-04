@@ -9,6 +9,7 @@ from flask_jwt_extended import (
     get_jwt_identity
 )
 import datetime
+import json
 
 
 class User(object):
@@ -73,26 +74,38 @@ def identity(payload):
 @app.route('/server/<servername>', methods=['GET'])
 @jwt_required
 def server(servername):
+    '''Returns details to given *servername*'''
     return db.getServer(servername)
 
 
 @app.route('/server/<servername>/cpuLoad/<time>', methods=['GET'])
 @jwt_required
 def serverLoadTime(servername, time):
-    if time == -1:
-        query = 'SELECT CPU_Usage AS "CPU", RAM_Usage AS "RAM"  FROM "RPI"."autogen"."server_load_short" WHERE "host"= \'' + servername + '\' FILL(previous)'
-    else:
-        query = 'SELECT mean("CPU_Usage") AS "CPU", mean("RAM_Usage") AS "RAM"  FROM "RPI"."autogen"."server_load_short" WHERE "host"= \'' + servername + '\' AND time > now()-' + time + 'h GROUP BY time(5m) FILL(previous)'
+    query = 'SELECT mean("CPU_Usage") AS "CPU", mean("RAM_Usage") AS "RAM"  FROM "RPI"."autogen"."server_load_short" WHERE "host"= \'' + servername + '\' AND time > now()-' + time + 'h GROUP BY time(5m) FILL(previous)'
     result = idb.query(query)
     return jsonify(result.raw)
 
 @app.route('/server/<servername>/cpuLoad', methods=['GET'])
 @jwt_required
 def serverLoad(servername):
-    query = 'SELECT CPU_Usage AS "CPU", RAM_Usage AS "RAM"  FROM "RPI"."autogen"."server_load_short" WHERE "host"= \'' + servername + '\' FILL(previous)'
+    query = ('SELECT mean(CPU_Usage) AS "CPU", mean(RAM_Usage) AS "RAM"  FROM "RPI"."autogen"."server_load_short" WHERE "host"= \'%s\' GROUP by time(24h) FILL(previous)') % (servername)
     result = idb.query(query)
+
     return jsonify(result.raw)
 
+@app.route('/server/<servername>/processes', methods=['GET'])
+@jwt_required
+def processes(servername):
+    processes = idb.query('SHOW TAG VALUES ON "RPI_Process" FROM "process_list" WITH KEY = "pName" WHERE "host"=\''+servername+'\'')
+    resultGen = processes.get_points();
+    result = []
+    for x in resultGen:
+        queryRes = idb.query(('SELECT * FROM "RPI_Process"."autogen"."process_list" WHERE "host"=\'%s\' AND "pName"=\'%s\' ORDER BY DESC LIMIT 1') % (servername, x[u'value']))
+        for y in queryRes.get_points():
+            if y[u'pCPU'] is not 0 and y[u'pMemory'] is not 0:
+                result.append(y)
+
+    return jsonify(result)
 
 
 @app.route('/servers', methods=['GET'])
@@ -106,6 +119,9 @@ def servers():
 def cpuLoad():
     result = idb.query('SELECT mean("CPU_Usage") AS "mean_CPU_Usage" FROM "RPI"."autogen"."server_load_short" WHERE "host"=raspberrypi_2 AND time > now()-2h GROUP BY time(5m) FILL(previous)')
     return result.raw
+
+
+
 
 
 if __name__ == '__main__':
