@@ -10,7 +10,7 @@ class MongoCon:
 
     def getServers(self):
 
-        return dumps(self.colServ.find())
+        return dumps(self.colServ.find({}, {"host": 1}))
 
     def getServer(self, name):
         client = MongoClient('0.0.0.0', 27017)

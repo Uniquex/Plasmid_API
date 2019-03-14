@@ -100,7 +100,7 @@ def processes(servername):
     resultGen = processes.get_points();
     result = []
     for x in resultGen:
-        queryRes = idb.query(('SELECT * FROM "RPI_Process"."autogen"."process_list" WHERE "host"=\'%s\' AND "pName"=\'%s\' ORDER BY DESC LIMIT 1') % (servername, x[u'value']))
+        queryRes = idb.query(('SELECT * FROM "RPI_Process"."rp1"."process_list" WHERE "host"=\'%s\' AND "pName"=\'%s\' ORDER BY DESC LIMIT 1') % (servername, x[u'value']))
         for y in queryRes.get_points():
             if y[u'pCPU'] is not 0 and y[u'pMemory'] is not 0:
                 result.append(y)
